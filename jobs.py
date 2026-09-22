@@ -162,32 +162,42 @@ class JobManager:
                 "summary": None,
             }
 
-            # 3. AI Post-Processing
+            # 3. AI Post-Processing (gracefully degraded if LLM provider is offline)
             if ai_action in ("polish", "summary") and transcription_result.text.strip():
                 self.update_status(job_id, "processing_ai", 75, f"Running AI {ai_action}...")
-                provider = llm_registry.get_provider(llm_provider)
+                try:
+                    provider = llm_registry.get_provider(llm_provider)
 
-                if ai_action == "polish":
-                    sys_prompt, user_prompt = get_polish_prompt(transcription_result.text)
-                    accumulated = []
-                    async for token in provider.generate_stream(
-                        prompt=user_prompt, system_prompt=sys_prompt, model=llm_model
-                    ):
-                        accumulated.append(token)
-                        self.emit(job_id, "ai_token", {"token": token, "action": "polish"})
-                    job_result["polished"] = "".join(accumulated)
+                    if ai_action == "polish":
+                        sys_prompt, user_prompt = get_polish_prompt(transcription_result.text)
+                        accumulated = []
+                        async for token in provider.generate_stream(
+                            prompt=user_prompt, system_prompt=sys_prompt, model=llm_model
+                        ):
+                            accumulated.append(token)
+                            self.emit(job_id, "ai_token", {"token": token, "action": "polish"})
+                        job_result["polished"] = "".join(accumulated)
 
-                elif ai_action == "summary":
-                    summarizer = ChunkedSummarizer(provider)
-                    accumulated = []
-                    async for token in summarizer.summarize_stream(
-                        transcript=transcription_result.text,
-                        level=summary_level,
-                        model=llm_model,
-                    ):
-                        accumulated.append(token)
-                        self.emit(job_id, "ai_token", {"token": token, "action": "summary"})
-                    job_result["summary"] = "".join(accumulated)
+                    elif ai_action == "summary":
+                        summarizer = ChunkedSummarizer(provider)
+                        accumulated = []
+                        async for token in summarizer.summarize_stream(
+                            transcript=transcription_result.text,
+                            level=summary_level,
+                            model=llm_model,
+                        ):
+                            accumulated.append(token)
+                            self.emit(job_id, "ai_token", {"token": token, "action": "summary"})
+                        job_result["summary"] = "".join(accumulated)
+                except Exception as ai_err:
+                    logger.warning("AI post-processing (%s) failed for job %s: %s", ai_action, job_id, ai_err)
+                    warn_text = f"AI {ai_action} skipped: {ai_err}. Check that Ollama is running ('ollama serve') or your API key is valid."
+                    job_result["ai_warning"] = warn_text
+                    if ai_action == "summary":
+                        job_result["summary"] = f"[{warn_text}]"
+                    elif ai_action == "polish":
+                        job_result["polished"] = f"[{warn_text}]"
+                    self.emit(job_id, "status", {"state": "warning", "progress": 85, "message": warn_text})
 
             # 4. Optional Notification Dispatch
             if notify:
