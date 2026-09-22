@@ -19,6 +19,7 @@ uploads/
 *.wav
 *.mp3
 *.m4a
+*.aac
 *.tmp
 
 # Logs
