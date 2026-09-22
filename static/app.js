@@ -391,13 +391,18 @@ document.addEventListener("DOMContentLoaded", () => {
         currentResult.duration = finalResult.duration;
         currentResult.processing_time = finalResult.processing_time;
 
-        if (finalResult.summary) {
+        if (finalResult.summary && !finalResult.summary.startsWith("[AI summary skipped")) {
           currentResult.summary = finalResult.summary;
           summaryContent.innerHTML = typeof marked !== "undefined" ? marked.parse(finalResult.summary) : finalResult.summary;
+        } else {
+          summaryContent.innerHTML = renderAiUnavailableNotice("Summary", finalResult.ai_warning || (finalResult.summary ? finalResult.summary.replace(/^\[|\]$/g, "") : null));
         }
-        if (finalResult.polished) {
+
+        if (finalResult.polished && !finalResult.polished.startsWith("[AI polish skipped")) {
           currentResult.polished = finalResult.polished;
           polishContent.textContent = finalResult.polished;
+        } else {
+          polishContent.innerHTML = renderAiUnavailableNotice("Polish", finalResult.ai_warning || (finalResult.polished ? finalResult.polished.replace(/^\[|\]$/g, "") : null));
         }
 
         transcriptionStats.textContent = `Duration: ${finalResult.duration.toFixed(1)}s • Processed in: ${finalResult.processing_time}s • Language: ${finalResult.language.toUpperCase()}`;
@@ -470,6 +475,28 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  function renderAiUnavailableNotice(actionName, warning) {
+    const detail = warning || "Ollama or OpenAI-compatible AI processor was not running or configured.";
+    return `
+      <div class="p-5 rounded-xl border border-amber-500/30 bg-amber-500/10 text-slate-200 space-y-3">
+        <div class="flex items-center gap-2 font-medium text-sm text-amber-400">
+          <svg class="w-4 h-4 text-amber-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <span>AI ${actionName} Not Available</span>
+        </div>
+        <p class="text-xs text-slate-300 leading-relaxed">${detail}</p>
+        <div class="pt-2 border-t border-amber-500/20 text-xs text-slate-400 space-y-1">
+          <p class="font-medium text-slate-300">To enable AI ${actionName.toLowerCase()}:</p>
+          <ul class="list-disc list-inside space-y-0.5 text-slate-300">
+            <li>Start local Ollama with <code class="px-1.5 py-0.5 bg-slate-900 rounded font-mono text-amber-300 text-[11px]">ollama serve</code></li>
+            <li>Or configure a remote Ollama host / cloud API key in <span class="text-indigo-400 font-medium cursor-pointer hover:underline" onclick="document.getElementById('settings-btn').click()">Settings</span></li>
+          </ul>
+        </div>
+      </div>
+    `;
+  }
+
   function switchResultTab(tabName) {
     [resTabTranscript, resTabPolish, resTabSummary].forEach((b) => {
       b.classList.remove("active", "text-indigo-400", "bg-indigo-500/10");
@@ -483,9 +510,15 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (tabName === "polish") {
       resTabPolish.classList.add("active", "text-indigo-400", "bg-indigo-500/10");
       viewportPolish.classList.remove("hidden");
+      if (!currentResult.polished && !polishContent.textContent.trim()) {
+        polishContent.innerHTML = renderAiUnavailableNotice("Polish");
+      }
     } else if (tabName === "summary") {
       resTabSummary.classList.add("active", "text-indigo-400", "bg-indigo-500/10");
       viewportSummary.classList.remove("hidden");
+      if (!currentResult.summary && !summaryContent.textContent.trim()) {
+        summaryContent.innerHTML = renderAiUnavailableNotice("Summary");
+      }
     }
   }
 
