@@ -151,13 +151,12 @@ fi
 if [ "${WHISPER_NEEDS_INSTALL}" = true ]; then
     DOWNLOAD_SUCCESS=false
     if [ "${ARCH_WHISPER}" != "unknown" ]; then
-        info "Querying latest release for ggml-org/whisper.cpp on GitHub..."
-        RELEASE_TAG=$(curl -sL https://api.github.com/repos/ggml-org/whisper.cpp/releases/latest | grep '"tag_name":' | head -n 1 | cut -d '"' -f 4 || echo "b5130")
-        if [ -z "${RELEASE_TAG}" ]; then
-            RELEASE_TAG="b5130"
-        fi
+        info "Querying latest binary release for ggml-org/whisper.cpp on GitHub..."
         ARCHIVE_NAME="whisper-bin-${ARCH_WHISPER}.tar.gz"
-        DOWNLOAD_URL="https://github.com/ggml-org/whisper.cpp/releases/download/${RELEASE_TAG}/${ARCHIVE_NAME}"
+        DOWNLOAD_URL=$(curl -sL https://api.github.com/repos/ggml-org/whisper.cpp/releases | grep -o "https://github.com/ggml-org/whisper.cpp/releases/download/[^\"/]*/${ARCHIVE_NAME}" | head -n 1 || echo "")
+        if [ -z "${DOWNLOAD_URL}" ]; then
+            DOWNLOAD_URL="https://github.com/ggml-org/whisper.cpp/releases/download/b5130/${ARCHIVE_NAME}"
+        fi
 
         info "Downloading precompiled binary from: ${DOWNLOAD_URL}"
         TMP_ARCHIVE="${BIN_DIR}/${ARCHIVE_NAME}"
@@ -165,13 +164,19 @@ if [ "${WHISPER_NEEDS_INSTALL}" = true ]; then
             tar -xzf "${TMP_ARCHIVE}" -C "${BIN_DIR}" --strip-components=1
             rm -f "${TMP_ARCHIVE}"
 
-            # Create standard runner script to ensure LD_LIBRARY_PATH is set
-            cat << 'WRAPPER' > "${BIN_DIR}/whisper-runner"
+            if [ -f "${BIN_DIR}/whisper-cli" ]; then
+                mv -f "${BIN_DIR}/whisper-cli" "${BIN_DIR}/whisper-cli-bin"
+            elif [ -f "${BIN_DIR}/main" ]; then
+                mv -f "${BIN_DIR}/main" "${BIN_DIR}/whisper-cli-bin"
+            fi
+
+            # Create runner script to ensure LD_LIBRARY_PATH resolves local shared libraries
+            cat << 'WRAPPER' > "${WHISPER_CLI_BIN}"
 #!/usr/bin/env bash
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export LD_LIBRARY_PATH="${SELF_DIR}:${LD_LIBRARY_PATH:-}"
-if [ -x "${SELF_DIR}/whisper-cli" ]; then
-    exec "${SELF_DIR}/whisper-cli" "$@"
+if [ -x "${SELF_DIR}/whisper-cli-bin" ]; then
+    exec "${SELF_DIR}/whisper-cli-bin" "$@"
 elif [ -x "${SELF_DIR}/main" ]; then
     exec "${SELF_DIR}/main" "$@"
 else
@@ -179,8 +184,7 @@ else
     exit 1
 fi
 WRAPPER
-            chmod +x "${BIN_DIR}/whisper-runner"
-            ln -sf "${BIN_DIR}/whisper-runner" "${WHISPER_CLI_BIN}"
+            chmod +x "${WHISPER_CLI_BIN}"
 
             if "${WHISPER_CLI_BIN}" --help >/dev/null 2>&1; then
                 success "Precompiled whisper.cpp binary verified successfully!"
@@ -207,12 +211,27 @@ WRAPPER
         cmake --build "${BUILD_DIR}/build" -j"$(nproc)" --config Release
 
         if [ -f "${BUILD_DIR}/build/bin/whisper-cli" ]; then
-            cp "${BUILD_DIR}/build/bin/whisper-cli" "${BIN_DIR}/"
-            success "Compiled whisper-cli installed to ${BIN_DIR}."
+            cp "${BUILD_DIR}/build/bin/whisper-cli" "${BIN_DIR}/whisper-cli-bin"
         elif [ -f "${BUILD_DIR}/build/bin/main" ]; then
-            cp "${BUILD_DIR}/build/bin/main" "${BIN_DIR}/whisper-cli"
-            success "Compiled main executable installed to ${BIN_DIR}/whisper-cli."
+            cp "${BUILD_DIR}/build/bin/main" "${BIN_DIR}/whisper-cli-bin"
         fi
+        cp -P "${BUILD_DIR}/build/bin/"*.so* "${BIN_DIR}/" 2>/dev/null || true
+
+        cat << 'WRAPPER' > "${WHISPER_CLI_BIN}"
+#!/usr/bin/env bash
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export LD_LIBRARY_PATH="${SELF_DIR}:${LD_LIBRARY_PATH:-}"
+if [ -x "${SELF_DIR}/whisper-cli-bin" ]; then
+    exec "${SELF_DIR}/whisper-cli-bin" "$@"
+elif [ -x "${SELF_DIR}/main" ]; then
+    exec "${SELF_DIR}/main" "$@"
+else
+    echo "whisper binary not found in ${SELF_DIR}" >&2
+    exit 1
+fi
+WRAPPER
+        chmod +x "${WHISPER_CLI_BIN}"
+        success "Compiled whisper-cli installed to ${BIN_DIR}."
         rm -rf "${BUILD_DIR}"
     fi
 fi
@@ -222,7 +241,7 @@ fi
 # ------------------------------------------------------------------------------
 DEFAULT_MODEL_NAME="ggml-base.bin"
 DEFAULT_MODEL_FILE="${MODELS_DIR}/${DEFAULT_MODEL_NAME}"
-BASE_MODEL_SHA256="60ed5bc3dd14eea856493d334349b405782ddcaf00eec29ec61e6d446f254145"
+BASE_MODEL_SHA256="60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe"
 
 if [ -f "${DEFAULT_MODEL_FILE}" ]; then
     info "Verifying checksum for existing model: ${DEFAULT_MODEL_NAME}..."
