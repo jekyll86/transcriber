@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Transcriber & AI Summarizer</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Marked for Markdown rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="h-full flex flex-col font-sans antialiased selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Navbar -->
+  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur-md sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i data-lucide="mic" class="w-5 h-5 text-white"></i>
+        </div>
+        <div>
+          <h1 class="text-lg font-semibold tracking-tight text-white flex items-center gap-2">
+            Audio Transcriber <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">AI Enhanced</span>
+          </h1>
+          <p class="text-xs text-slate-400">Whisper • Ollama • Multi-Channel Notifications</p>
+        </div>
+      </div>
+
+      <!-- Status Badges & Settings Button -->
+      <div class="flex items-center space-x-3">
+        <div id="ollama-status-badge" class="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-400 border border-slate-700">
+          <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span>Checking Ollama...</span>
+        </div>
+        <button id="open-settings-btn" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors border border-slate-700">
+          <i data-lucide="settings" class="w-4 h-4"></i>
+          <span class="hidden sm:inline">Settings</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    
+    <!-- Ingestion & Configuration Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+      <!-- Left Column: Audio Input (Dropzone & Recorder) -->
+      <div class="lg:col-span-6 space-y-6">
+        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm shadow-xl">
+          <h2 class="text-base font-semibold text-slate-200 mb-4 flex items-center gap-2">
+            <i data-lucide="upload-cloud" class="w-5 h-5 text-indigo-400"></i> 1. Select Audio or Record
+          </h2>
+
+          <!-- Tabs for Upload vs Record -->
+          <div class="flex border-b border-slate-800 mb-4">
+            <button id="tab-upload-btn" class="flex-1 pb-3 text-sm font-medium border-b-2 border-indigo-500 text-indigo-400 flex items-center justify-center gap-2">
+              <i data-lucide="file-audio" class="w-4 h-4"></i> File Upload
+            </button>
+            <button id="tab-record-btn" class="flex-1 pb-3 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-300 flex items-center justify-center gap-2">
+              <i data-lucide="mic" class="w-4 h-4"></i> Live Microphone
+            </button>
+          </div>
+
+          <!-- File Upload Dropzone -->
+          <div id="dropzone-panel" class="space-y-4">
+            <div id="dropzone" class="border-2 border-dashed border-slate-700 hover:border-indigo-500/70 rounded-xl p-8 text-center cursor-pointer transition-all bg-slate-950/40 hover:bg-indigo-950/10">
+              <input type="file" id="audio-file-input" class="hidden" accept="audio/*,video/*,.mp3,.wav,.m4a,.ogg,.flac,.aac,.opus,.webm,.mp4">
+              <div class="mx-auto w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3 text-slate-400">
+                <i data-lucide="music" class="w-6 h-6"></i>
+              </div>
+              <p class="text-sm font-medium text-slate-200">Drag & drop your audio or video file here</p>
+              <p class="text-xs text-slate-400 mt-1">MP3, WAV, M4A, OGG, FLAC, MP4, WEBM (auto-converted to 16kHz WAV)</p>
+              <button type="button" class="mt-4 px-4 py-2 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30 transition-all">
+                Browse Files
+              </button>
+            </div>
+
+            <!-- Selected File Card -->
+            <div id="selected-file-card" class="hidden p-4 rounded-xl bg-slate-800/60 border border-slate-700/80 flex items-center justify-between">
+              <div class="flex items-center space-x-3 overflow-hidden">
+                <div class="w-10 h-10 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center flex-shrink-0">
+                  <i data-lucide="file-audio-2" class="w-5 h-5"></i>
+                </div>
+                <div class="truncate">
+                  <p id="file-name" class="text-sm font-medium text-slate-200 truncate">sample.mp3</p>
+                  <p id="file-size" class="text-xs text-slate-400">0.0 MB</p>
+                </div>
+              </div>
+              <button id="remove-file-btn" class="text-slate-400 hover:text-red-400 p-2 transition-colors">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Microphone Recording Panel -->
+          <div id="recorder-panel" class="hidden space-y-4 text-center py-6">
+            <div class="flex flex-col items-center justify-center space-y-4">
+              <button id="record-toggle-btn" class="w-20 h-20 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-lg shadow-red-600/30 transition-transform active:scale-95">
+                <i id="record-icon" data-lucide="mic" class="w-8 h-8"></i>
+              </button>
+              <div id="record-timer" class="text-2xl font-mono text-slate-200">00:00</div>
+              <p id="record-status" class="text-xs text-slate-400">Click to start recording from your microphone</p>
+            </div>
+            <!-- Audio preview player -->
+            <audio id="record-preview" controls class="hidden w-full mt-4"></audio>
+          </div>
+
+          <!-- Audio playback preview -->
+          <audio id="audio-preview" controls class="hidden w-full mt-4"></audio>
+        </div>
+      </div>
+
+      <!-- Right Column: Pipeline Configuration -->
+      <div class="lg:col-span-6 space-y-6">
+        <div class="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm shadow-xl space-y-5">
+          <h2 class="text-base font-semibold text-slate-200 flex items-center gap-2">
+            <i data-lucide="sliders" class="w-5 h-5 text-indigo-400"></i> 2. Processing Pipeline Settings
+          </h2>
+
+          <!-- Whisper Engine & Model -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">Whisper Engine</label>
+              <select id="whisper-engine-select" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                <option value="faster-whisper" selected>Faster Whisper (Python)</option>
+                <option value="whisper.cpp">Whisper C++ Binary</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">Model Size</label>
+              <select id="whisper-model-select" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                <option value="tiny">Tiny (Fastest)</option>
+                <option value="base" selected>Base (Recommended)</option>
+                <option value="small">Small (More Accurate)</option>
+                <option value="medium">Medium (High Precision)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Language Selector -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1.5">Language</label>
+            <select id="language-select" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+              <option value="auto" selected>Auto Detect</option>
+              <option value="en">English</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="it">Italian</option>
+              <option value="pt">Portuguese</option>
+              <option value="nl">Dutch</option>
+              <option value="ja">Japanese</option>
+              <option value="zh">Chinese</option>
+            </select>
+          </div>
+
+          <!-- AI Action Selector -->
+          <div>
+            <label class="block text-xs font-medium text-slate-300 mb-1.5">AI Post-Processing</label>
+            <div class="grid grid-cols-3 gap-2">
+              <button type="button" data-action="raw" class="ai-action-btn py-2 px-3 rounded-lg text-xs font-medium border border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600 transition-all flex items-center justify-center gap-1.5">
+                <i data-lucide="file-text" class="w-3.5 h-3.5"></i> Raw Only
+              </button>
+              <button type="button" data-action="polish" class="ai-action-btn py-2 px-3 rounded-lg text-xs font-medium border border-slate-700 bg-slate-950 text-slate-300 hover:border-slate-600 transition-all flex items-center justify-center gap-1.5">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Polish
+              </button>
+              <button type="button" data-action="summary" class="ai-action-btn active py-2 px-3 rounded-lg text-xs font-medium border border-indigo-500 bg-indigo-500/10 text-indigo-400 transition-all flex items-center justify-center gap-1.5">
+                <i data-lucide="list-collapse" class="w-3.5 h-3.5"></i> Summarize
+              </button>
+            </div>
+          </div>
+
+          <!-- Summary Detail Level (visible when summarize is active) -->
+          <div id="summary-options-box" class="space-y-3">
+            <label class="block text-xs font-medium text-slate-300">Summary Detail Level</label>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <button type="button" data-level="tldr" class="summary-level-btn py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-700 bg-slate-950 text-slate-300">TL;DR</button>
+              <button type="button" data-level="bullets" class="summary-level-btn active py-1.5 px-2 rounded-lg text-xs font-medium border border-indigo-500 bg-indigo-500/10 text-indigo-400">Key Takeaways</button>
+              <button type="button" data-level="detailed" class="summary-level-btn py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-700 bg-slate-950 text-slate-300">Detailed</button>
+              <button type="button" data-level="action_items" class="summary-level-btn py-1.5 px-2 rounded-lg text-xs font-medium border border-slate-700 bg-slate-950 text-slate-300">Action Items</button>
+            </div>
+          </div>
+
+          <!-- AI Model Selection -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">AI Provider</label>
+              <select id="llm-provider-select" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                <option value="ollama" selected>Ollama</option>
+                <option value="openai_compat">OpenAI Compatible</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5 flex items-center justify-between">
+                <span>Model</span>
+                <button id="refresh-models-btn" class="text-xs text-indigo-400 hover:text-indigo-300">Refresh</button>
+              </label>
+              <select id="llm-model-select" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                <option value="llama3.2">llama3.2</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Notification Dispatch Checkbox -->
+          <div class="flex items-center space-x-2 pt-2 border-t border-slate-800">
+            <input type="checkbox" id="notify-checkbox" class="w-4 h-4 rounded text-indigo-600 bg-slate-950 border-slate-700 focus:ring-indigo-500">
+            <label for="notify-checkbox" class="text-xs text-slate-300">Send Telegram / Webhook notification on completion</label>
+          </div>
+
+          <!-- VAD Toggle -->
+          <div class="flex items-center space-x-2 pt-1">
+            <input type="checkbox" id="vad-checkbox" checked class="w-4 h-4 rounded text-indigo-600 bg-slate-950 border-slate-700 focus:ring-indigo-500">
+            <label for="vad-checkbox" class="text-xs text-slate-300">Enable Voice Activity Detection (VAD) silence filtering</label>
+          </div>
+
+          <!-- Primary Action Button -->
+          <button id="start-process-btn" class="w-full py-3 px-4 rounded-xl font-medium text-sm bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2">
+            <i data-lucide="play" class="w-4 h-4"></i> Start Transcription & Processing
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Progress & Stepper Bar -->
+    <div id="progress-container" class="hidden bg-slate-900/40 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm space-y-4">
+      <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+        <span id="current-step-label" class="font-medium text-indigo-400">Converting Audio...</span>
+        <span id="step-counter">Step 1 of 3</span>
+      </div>
+      <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+        <div id="progress-bar" class="bg-gradient-to-r from-indigo-500 to-violet-500 h-2 rounded-full w-0 transition-all duration-300"></div>
+      </div>
+    </div>
+
+    <!-- Results Workspace -->
+    <div id="results-container" class="hidden bg-slate-900/50 border border-slate-800 rounded-2xl p-6 backdrop-blur-sm shadow-xl space-y-6">
+      
+      <!-- Results Header & Tabs -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+        <div class="flex space-x-2 border border-slate-800 p-1 rounded-xl bg-slate-950/60">
+          <button id="res-tab-transcript" class="res-tab active px-4 py-2 rounded-lg text-xs font-medium text-indigo-400 bg-indigo-500/10">
+            Raw Transcript
+          </button>
+          <button id="res-tab-polish" class="res-tab px-4 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200">
+            Polished
+          </button>
+          <button id="res-tab-summary" class="res-tab px-4 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-slate-200">
+            Summary
+          </button>
+        </div>
+
+        <!-- Export & Action Buttons -->
+        <div class="flex items-center space-x-2">
+          <button id="copy-btn" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy
+          </button>
+          <button id="download-txt-btn" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> TXT
+          </button>
+          <button id="download-srt-btn" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors">
+            <i data-lucide="subtitles" class="w-3.5 h-3.5"></i> SRT
+          </button>
+          <button id="download-vtt-btn" class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors">
+            <i data-lucide="file-code" class="w-3.5 h-3.5"></i> VTT
+          </button>
+        </div>
+      </div>
+
+      <!-- Result Viewports -->
+      <div id="viewport-transcript" class="space-y-4">
+        <!-- Timestamped Segments Switch -->
+        <div class="flex items-center justify-between text-xs text-slate-400">
+          <span id="transcription-stats">Duration: 0.0s • Processed in: 0.0s</span>
+          <label class="flex items-center space-x-2 cursor-pointer">
+            <input type="checkbox" id="toggle-timestamps" checked class="w-3.5 h-3.5 rounded text-indigo-600 bg-slate-950 border-slate-700">
+            <span>Show Timestamps</span>
+          </label>
+        </div>
+        <div id="transcript-segments-list" class="space-y-2 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar"></div>
+        <div id="transcript-plain-text" class="hidden text-sm text-slate-200 leading-relaxed whitespace-pre-wrap"></div>
+      </div>
+
+      <div id="viewport-polish" class="hidden space-y-4">
+        <div id="polish-content" class="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap bg-slate-950/40 p-4 rounded-xl border border-slate-800/80"></div>
+      </div>
+
+      <div id="viewport-summary" class="hidden space-y-4">
+        <div id="summary-content" class="prose prose-invert max-w-none text-sm leading-relaxed bg-slate-950/40 p-5 rounded-xl border border-slate-800/80"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 space-y-6 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <h3 class="text-base font-semibold text-slate-200 flex items-center gap-2">
+          <i data-lucide="sliders" class="w-5 h-5 text-indigo-400"></i> Settings & Integrations
+        </h3>
+        <button id="close-settings-btn" class="text-slate-400 hover:text-slate-200 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Settings Tabs -->
+      <div class="space-y-5 text-sm">
+        
+        <!-- Telegram Section -->
+        <div class="border border-slate-800 rounded-xl p-4 bg-slate-950/40 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-medium text-slate-200 flex items-center gap-2">
+              <i data-lucide="send" class="w-4 h-4 text-blue-400"></i> Telegram Bot Integration
+            </span>
+            <button id="test-telegram-btn" class="px-2.5 py-1 text-xs font-medium rounded-lg bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20">
+              Test Connection
+            </button>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Bot Token</label>
+            <input type="password" id="telegram-token-input" placeholder="123456789:ABCdefGhIJKlmNoPQRstuVWXyz" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200">
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Chat ID</label>
+            <input type="text" id="telegram-chat-id-input" placeholder="-1001234567890 or user ID" class="w-full bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200">
+          </div>
+          <div id="telegram-test-result" class="text-xs text-slate-400"></div>
+        </div>
+
+        <!-- Ollama Pull Model Section -->
+        <div class="border border-slate-800 rounded-xl p-4 bg-slate-950/40 space-y-3">
+          <span class="font-medium text-slate-200 flex items-center gap-2">
+            <i data-lucide="download-cloud" class="w-4 h-4 text-emerald-400"></i> Pull Ollama Model
+          </span>
+          <div class="flex gap-2">
+            <input type="text" id="pull-model-name-input" placeholder="e.g. llama3.2, mistral, phi3" class="flex-1 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200">
+            <button id="pull-model-btn" class="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white">
+              Pull Model
+            </button>
+          </div>
+          <div id="pull-model-status" class="text-xs text-slate-400"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+  <script>
+    lucide.createIcons();
+  </script>
+</body>
+</html>

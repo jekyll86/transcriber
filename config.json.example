@@ -1,0 +1,35 @@
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 8000,
+    "debug": false
+  },
+  "whisper": {
+    "default_engine": "faster-whisper",
+    "default_model": "base",
+    "bin_path": null,
+    "models_dir": null,
+    "use_in_memory_pcm": true
+  },
+  "ollama": {
+    "base_url": "http://127.0.0.1:11434",
+    "default_model": "llama3.2"
+  },
+  "openai_compatible": {
+    "api_key": null,
+    "base_url": "https://api.openai.com/v1",
+    "default_model": "gpt-4o-mini"
+  },
+  "notifications": {
+    "telegram": {
+      "enabled": false,
+      "bot_token": "",
+      "chat_id": ""
+    },
+    "webhook": {
+      "enabled": false,
+      "url": "",
+      "secret": ""
+    }
+  }
+}

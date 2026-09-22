@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Local configuration containing personal credentials & tokens
+config.json
+*.local.json
+
+# Local binaries, models, uploads
+bin/
+models/
+uploads/
+*.wav
+*.mp3
+*.m4a
+*.tmp
+
+# Logs
+*.log
+
+# Development backlog
+TODO.md
