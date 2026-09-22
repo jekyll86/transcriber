@@ -391,6 +391,15 @@ document.addEventListener("DOMContentLoaded", () => {
         currentResult.duration = finalResult.duration;
         currentResult.processing_time = finalResult.processing_time;
 
+        if (finalResult.summary) {
+          currentResult.summary = finalResult.summary;
+          summaryContent.innerHTML = typeof marked !== "undefined" ? marked.parse(finalResult.summary) : finalResult.summary;
+        }
+        if (finalResult.polished) {
+          currentResult.polished = finalResult.polished;
+          polishContent.textContent = finalResult.polished;
+        }
+
         transcriptionStats.textContent = `Duration: ${finalResult.duration.toFixed(1)}s • Processed in: ${finalResult.processing_time}s • Language: ${finalResult.language.toUpperCase()}`;
         transcriptPlainText.textContent = finalResult.text;
       });
