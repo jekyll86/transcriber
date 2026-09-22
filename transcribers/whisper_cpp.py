@@ -91,14 +91,25 @@ class WhisperCppTranscriber(BaseTranscriber):
             ]
 
             if vad_filter:
-                cmd.append("--vad")
+                vad_candidates = [
+                    self.models_dir / "ggml-silero-vad.bin",
+                    self.models_dir / "silero-vad.bin",
+                ]
+                vad_model = next((v for v in vad_candidates if v.is_file()), None)
+                if vad_model:
+                    cmd.extend(["--vad", "-vm", str(vad_model)])
 
             if language and language.lower() not in ("auto", ""):
                 cmd.extend(["-l", language.lower()])
             else:
                 cmd.extend(["-l", "auto"])
 
-            proc = subprocess.run(cmd, capture_output=True, text=True)
+            env = dict(os.environ)
+            bin_parent = str(Path(self.bin_path).parent)
+            current_ld = env.get("LD_LIBRARY_PATH", "")
+            env["LD_LIBRARY_PATH"] = f"{bin_parent}:{current_ld}" if current_ld else bin_parent
+
+            proc = subprocess.run(cmd, capture_output=True, text=True, env=env)
             if proc.returncode != 0:
                 raise RuntimeError(f"whisper.cpp failed (code {proc.returncode}): {proc.stderr or proc.stdout}")
 
